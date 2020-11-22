@@ -120,7 +120,7 @@ https://parser-api.com/parser/sudrf_api/?key=КЛЮЧ&page=1&caseParticipant=С�
         {
 
             // Считываем входные параметры из таблицы
-            string sql = "select top 1 id, name, caseNumber, person_id, r_region, cast(caseDateFrom as date) caseDateFrom, cast(caseDateTo as date) caseDateTo, caseNumber, hasDocument, r_processType from Filbert_court_requests " +
+            string sql = "select top 10 id, name, caseNumber, person_id, r_region, cast(caseDateFrom as date) caseDateFrom, cast(caseDateTo as date) caseDateTo, caseNumber, hasDocument, r_processType from Filbert_court_requests where isnull(execution_flag,0)!=1 " +
              "order by id desc"   ;
             DataTable dt1 = GetData(sql);
 
@@ -130,34 +130,52 @@ https://parser-api.com/parser/sudrf_api/?key=КЛЮЧ&page=1&caseParticipant=С�
             foreach (DataRow dt in dt1.Rows)            //Устарело, т.к. формируем запрос по последней записи
             {
                 string jstr = @"{ ";
-                jstr += (dt["caseNumber"] != DBNull.Value ? @"""caseNumber"": """ + dt.Rows[0]["caseNumber"].ToString() + @"""," : string.Empty);                     //           @"""}" ; 
+                jstr += (dt["caseNumber"] != DBNull.Value ? @"""caseNumber"": """ + dt["caseNumber"].ToString() + @"""," : string.Empty);                     //           @"""}" ; 
 
 
                 //   jstr += (dt.Rows[0]["caseNumber"] != DBNull.Value ? @"""caseDateTo"": """ + dt.Rows[0]["caseNumber"].ToString() + @"""," : string.Empty);   //caseNumber
-                jstr += (dt.Rows[0]["hasDocument"] != DBNull.Value ? @"""hasDocument"":" + Convert.ToInt16(dt.Rows[0]["hasDocument"]).ToString() + @"," : string.Empty);   //hasDocument
+                jstr += (dt["hasDocument"] != DBNull.Value ? @"""hasDocument"":" + Convert.ToInt16(dt["hasDocument"]).ToString() + @"," : string.Empty);   //hasDocument
 
                 // Для запросов по СОЮ и Мровым судьям, берутся следующие поля: Name (ФИО)
 
 
-                if (dt.Rows[0]["name"] != DBNull.Value)
+                if (dt["name"] != DBNull.Value)
                 {
                     // Если задействованы эти запросы, остальные поля игнорируем
-                    string fio = Regex.Replace(dt.Rows[0]["Name"].ToString(), " ", "%26%23032%3B");  //   &#032;
+                    string fio = Regex.Replace(dt["Name"].ToString(), " ", "%26%23032%3B");  //   &#032;
 
 
                     jstr = @"{ ";
-                    jstr += (dt.Rows[0]["Name"] != DBNull.Value ? @"""caseParticipant"":""" + fio + @"""," : string.Empty);
-                    jstr += Convert.ToInt16(dt.Rows[0]["r_processType"].ToString()) == 1 ? @"""group"":""Гражданские%20и%20административные%20дела"","
-                                                : @"""Group"":""Гражданские%20и%20административные%20дела%20мировых%20судей""";
+                    jstr += (dt["Name"] != DBNull.Value ? @"""caseParticipant"":""" + fio + @"""," : string.Empty);
+                    jstr += Convert.ToInt16(dt["r_processType"].ToString()) == 1 ? @"""group"":""Гражданские%20и%20административные%20дела"","
+                                                : @"""group"":""Гражданские%20и%20административные%20дела%20мировых%20судей""";
 
                 }
+                //суд, номер дела, инстанция, уровень суда, регион, статья или категория, судья, дата регистрации дела, дата окончания (с по), дата вступления решения в силу (с по), ФИО
+                jstr += (dt["r_region"] != DBNull.Value ? @",""region"": """ + get_dict("region", Convert.ToInt32(dt["r_region"].ToString())) + @"""," : string.Empty);
+                jstr += (dt["caseDateFrom"] != DBNull.Value ? @"""caseDateFrom"": """ + DateTime.Parse(dt["caseDateFrom"].ToString()).ToShortDateString() + @"""," : string.Empty);           //                caseDateFrom
+                jstr += (dt["caseDateTo"] != DBNull.Value ? @"""caseDateTo"": """ + DateTime.Parse(dt["caseDateTo"].ToString()).ToShortDateString() + @"""," : string.Empty);   //caseDateTo 
+                jstr += (dt["caseLegalForceDateFrom"] != DBNull.Value ? @"""caseLegalForceDateFrom"": """ + DateTime.Parse(dt["caseLegalForceDateFrom"].ToString()).ToShortDateString() + @"""," : string.Empty);   //caseLegalForceDateFrom	 
+                jstr += (dt["caseLegalForceDateTo"] != DBNull.Value ? @"""caseLegalForceDateTo"": """ + DateTime.Parse(dt["caseLegalForceDateTo"].ToString()).ToShortDateString() + @"""," : string.Empty);   
+                jstr += (dt["caseNumber"] != DBNull.Value ? @"""caseNumber"": """ + DateTime.Parse(dt["caseNumber"].ToString()).ToShortDateString() + @"""," : string.Empty);   
 
-                jstr += (dt.Rows[0]["r_region"] != DBNull.Value ? @"""region"": """ + get_dict("region", Convert.ToInt32(dt.Rows[0]["r_region"].ToString())) + @"""," : string.Empty);
-                jstr += (dt.Rows[0]["caseDateFrom"] != DBNull.Value ? @"""caseDateFrom"": """ + DateTime.Parse(dt.Rows[0]["caseDateFrom"].ToString()).ToShortDateString() + @"""," : string.Empty);           //                caseDateFrom
-                jstr += (dt.Rows[0]["caseDateTo"] != DBNull.Value ? @"""caseDateTo"": """ + DateTime.Parse(dt.Rows[0]["caseDateTo"].ToString()).ToShortDateString() + @"""," : string.Empty);   //caseDateTo 
-                                                                                                                                                                                                //////////////////////////////////////////////////////////////////////////////
-                                                                                                                                                                                                // jstr = Regex.Replace(jstr, @"[\x2C](?=\\n$)", "");   
-                jstr = Regex.Replace(jstr, @"[\x2C]($)", "");
+                
+
+
+
+
+
+
+
+
+
+
+
+                //////////////////////////////////////////////////////////////////////////////
+
+
+                // jstr = Regex.Replace(jstr, @"[\x2C](?=\\n$)", "");   
+                jstr = Regex.Replace(jstr, @"[\x2C]($)", "");      //Убираем запятую последнюю ?
                 jstr += @"}";
 
 
@@ -168,19 +186,32 @@ https://parser-api.com/parser/sudrf_api/?key=КЛЮЧ&page=1&caseParticipant=С�
                 //////////////////////////////
                 if (j1 == string.Empty || j1.Contains("error"))
                 {
-                    Filbert_court_requests_log(2, Convert.ToInt16(dt.Rows[0]["id"].ToString()), 0);
-                    Console.WriteLine("\nКонец работы. Нажмите любую клавишу.");
-                    Console.ReadKey();
-                    return;
+                    continue;
+                    /*
+                     Filbert_court_requests_log(2, Convert.ToInt16(dt["id"].ToString()), 0);
+                     Console.WriteLine("\nКонец работы. Нажмите любую клавишу.");
+                     Console.ReadKey();
+                     return;
+                    */
+                }
+
+                else if (Convert.ToInt32(JObject.Parse(j1)["total_count"].ToString()) == 0)
+                {
+                    string sql_i = "update Filbert_court_requests set execution_flag = 1 where id = " + dt["id"].ToString();
+                    SqlCommand cmd_l = new SqlCommand(sql_i, cnn);
+                    if (cnn.State != ConnectionState.Open) cnn.Open();
+                    cmd_l.ExecuteNonQuery();
+                    Filbert_court_requests_log(2, Convert.ToInt16(dt["id"].ToString()), 0);
+                    continue;
                 }
                 else
 
                 {
-                    Filbert_court_requests_log(1, Convert.ToInt16(dt.Rows[0]["id"].ToString()), 0);
+                    Filbert_court_requests_log(1, Convert.ToInt16(dt["id"].ToString()), 0);
                 }
                 ///////////////////////////
                 ///
-                add_caseid(j1, dt.Rows[0]); // записали первый запрос
+                add_caseid(j1, dt); // записали первый запрос
                 if (Convert.ToInt32(JObject.Parse(j1)["total_count"].ToString()) > 200)
                 {
                     int total = (Convert.ToInt32(JObject.Parse(j1)["total_count"].ToString()) - 200) / 10;
@@ -190,7 +221,7 @@ https://parser-api.com/parser/sudrf_api/?key=КЛЮЧ&page=1&caseParticipant=С�
                         JObject jo1 = JObject.Parse(jstr);
                         ((JObject)jo1).Add(new JProperty("page", Newtonsoft.Json.JsonConvert.DeserializeObject(i.ToString())));
                         j1 = req(KEY, jo1);
-                        add_caseid(j1, dt.Rows[0]);
+                        add_caseid(j1, dt);
                     }
 
                 }
@@ -211,27 +242,27 @@ https://parser-api.com/parser/sudrf_api/?key=КЛЮЧ&page=1&caseParticipant=С�
                     jstr = req(KEY, jSon);
                     if (jstr == string.Empty || jstr.Contains("error"))
                     {
-                        Filbert_court_requests_log(2, Convert.ToInt16(dt.Rows[0]["id"].ToString()), 1, c.id);
+                        Filbert_court_requests_log(2, Convert.ToInt16(dt["id"].ToString()), 1, c.id);
                         continue;
                     }
                     else
                     {
 
-                        Filbert_court_requests_log(1, Convert.ToInt16(dt.Rows[0]["id"].ToString()), 1, c.id);
+                        Filbert_court_requests_log(1, Convert.ToInt16(dt["id"].ToString()), 1, c.id);
                     }
                     jSon = JObject.Parse(jstr);
                     if (jSon["case"].HasValues == false) continue;
                     // запись в БД полная инфа по ИД
-                    string sql_ins = "insert into Filbert_court_result (person_id, EndDate,RegisterDate, Category, r_Region, CourtName, CaseType, Judge, CaseNumber,Result, r_participants, " +
+                    string sql_ins = "insert into Filbert_court_result (person_id, EndDate,RegisterDate, Category, r_Region, CourtName, processType, Judge, CaseNumber,Result, r_participants, " +
                         "r_history, r_documents,r_id) values (" +
 
-                      (dt.Rows[0]["person_id"] != DBNull.Value ? dt.Rows[0]["person_id"].ToString() : "null") + "," +
+                      (dt["person_id"] != DBNull.Value ? dt["person_id"].ToString() : "null") + "," +
                       (jSon["case"]["EndDate"] != null ? "'" + jSon["case"]["EndDate"].ToString() + "'" : "null") + "," +
                       (jSon["case"]["RegisterDate"] != null ? "'" + jSon["case"]["RegisterDate"].ToString() + "'" : "null") + "," +
                       (jSon["case"]["Category"] != null ? "'" + jSon["case"]["Category"].ToString() + "'" : "null") + "," +
                       (jSon["case"]["Region"] != null ? getdict_id("region", jSon["case"]["Region"].ToString()) : "null") + "," +
                       (jSon["case"]["CourtName"] != null ? "'" + jSon["case"]["CourtName"].ToString() + "'" : "null") + "," +
-                      (jSon["case"]["CaseType"] != null ? "'" + jSon["case"]["CaseType"].ToString() + "'" : "null") + "," +
+                      (jSon["case"]["ProcessType"] != null ? "'" + jSon["case"]["ProcessType"].ToString() + "'" : "null") + "," +
                       (jSon["case"]["Judge"] != null ? "'" + jSon["case"]["Judge"].ToString() + "'" : "null") + "," +
                       (jSon["case"]["CaseNumber"] != null ? "'" + jSon["case"]["CaseNumber"].ToString() + "'" : "null") + "," +
                       (jSon["case"]["Result"] != null ? "'" + jSon["case"]["Result"].ToString() + "'" : "null") + "," +
@@ -239,7 +270,7 @@ https://parser-api.com/parser/sudrf_api/?key=КЛЮЧ&page=1&caseParticipant=С�
                       (jSon["case"]["history"] != null ? r_history.ToString() : "null") + "," +
                       (jSon["case"]["documents"] != null ? r_doc.ToString() : "null") +
 
-                      ", " + dt.Rows[0]["id"].ToString() +
+                      ", " + dt["id"].ToString() +
 
 
                         ") ";
@@ -312,10 +343,7 @@ https://parser-api.com/parser/sudrf_api/?key=КЛЮЧ&page=1&caseParticipant=С�
                         }
                     }
 
-                    string sql_i = "update Filbert_court_requests set execution_flag = 1 where id = " + dt.Rows[0]["id"].ToString();
-                    cmd_log = new SqlCommand(sql_i, cnn);
-                    if (cnn.State != ConnectionState.Open) cnn.Open();
-                    cmd_log.ExecuteNonQuery();
+                   
 
 
 
@@ -328,10 +356,18 @@ https://parser-api.com/parser/sudrf_api/?key=КЛЮЧ&page=1&caseParticipant=С�
 
                 }
 
+                string sqli = "update Filbert_court_requests set execution_flag = 1 where id = " + dt["id"].ToString();
+                SqlCommand cmdl = new SqlCommand(sqli, cnn);
+                if (cnn.State != ConnectionState.Open) cnn.Open();
+                cmdl.ExecuteNonQuery();
 
             }
 
+           
             
+
+
+
         }
 
 
